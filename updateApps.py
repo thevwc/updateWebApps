@@ -7,9 +7,9 @@ import os
 import sh
 import datetime
 
-
-
-# TBD ADD ERROR CHECKS FOR EACH STEP AND MORE DEBUG OUTPUT
+# Note that for all sh invocations below, if command returns
+# an error, sh will check and emit stdout, stderr, and dump a backtrack for 
+# exception.
 
 appName         = "Education"
 gitRepo         = "https://github.com/dneiss/vwc-education.git"
@@ -25,7 +25,6 @@ isProdServer    = False
 isDevServer = True
 
 
-
 if isDevServer and isProdServer:
    print("ERROR, we must be configuring either a dev or prod server")
    exit(-1)
@@ -33,17 +32,22 @@ if not isDevServer and not isProdServer:
    print("ERROR, we must be configuring either a dev or prod server")
    exit(-1)
 
+
 myAppFullPathDir = os.path.join(appsFullPathDir,appName)
-origDir = sh.pwd().stdout.decode().strip()
+r = sh.pwd()
+origDir = r.stdout.decode().strip()
+
 
 # Stop service before doing update
 print(f"Stopping service for {appName}")
 r = sh.sudo(["systemctl","stop",appName])
 
+
 # Create backup dir
 myAppArchiveFullPathDir = os.path.join(appsFullPathDir,appName+".archived")
 print(f"Creating backup dir {appName}")
 r=sh.mkdir("-p",myAppArchiveFullPathDir)
+
 
 # Archive original app
 if os.path.exists(myAppFullPathDir):
@@ -55,29 +59,35 @@ if os.path.exists(myAppFullPathDir):
 else:
    print(f"App dir ({myAppFullPathDir}) doesn't exist, so skipped archiving it")
 
+
 # Clone repo
 print(f"Cloning git repo {gitRepo} to {myAppFullPathDir}")
 r = sh.git.clone(gitRepo,myAppFullPathDir)
+
 
 # Checkout specific version of code
 r = sh.cd(myAppFullPathDir)
 print(f"Running git checkout for version {gitRepoVersion}")
 r = sh.git.checkout(gitRepoVersion)
 
+
 # Create venv 
 print(f"Creating a venv in {myAppFullPathDir}")
 r = sh.python3("-m","venv","venv")
+
 
 # Upgrade pip
 print(f"Upgrading the venv pip to latest...")
 pathToAppsPython = os.path.join(myAppFullPathDir,"venv/bin/python")
 r = os.system(f"{pathToAppsPython} -m pip install --upgrade pip")
 
+
 # Activate venv and then pip install required packages
 print(f"Pip installing into venv the required packages...")
 r = os.system(f"cd {myAppFullPathDir}; . venv/bin/activate; pip install -r requirements.txt;")
 
 r = sh.cd(origDir)
+
 
 # Copy in the appropriate env file and minimized its access due to secrets in file
 if isDevServer:
@@ -105,7 +115,6 @@ print(f"Check service status for {appName}")
 r = sh.sudo(["systemctl","status","-l","--no-pager",appName])
 
 
-#test web access
-
-#eventually, run a regression test on software
+# TBD test web access
+# TBD run app provided regression test on the web interface
 
