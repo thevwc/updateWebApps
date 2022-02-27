@@ -5,14 +5,14 @@
 
 import os
 import sh
+import sys
 import datetime
 
 
-# Update this list with your apps
-# tuple format = (appName, repo URL, default branch)
-apps = [
-   ("Education", "https://github.com/dneiss/vwc-education.git", "main")
-]
+# Update this with your apps
+apps = {
+   "Education" : ("https://github.com/dneiss/vwc-education.git", "main")
+}
 
 
 # Note that for all sh invocations below, if command returns
@@ -28,9 +28,7 @@ isProdServer    = False
 filesToDelete = [".DS_Store"]
 
 
-# TBD command line options for which app and which version to select
-#select app name
-#select app branchtip, sha, or tag
+# TBD Add command line options for which app and which version to select
 isDevServer = True
 
 
@@ -42,7 +40,29 @@ if not isDevServer and not isProdServer:
    exit(-1)
 
 
-for appName,gitRepo,gitRepoVersion in apps:
+updateAll = False
+appsToUpdate = sys.argv[1:]
+if len(appsToUpdate) == 0:
+   print("Invoke as 'updateApps.py [appName]...' or 'updateApps.py ALL'")
+   exit(-1)
+if len(appsToUpdate) == 1:
+   if appsToUpdate[0] == "ALL":
+      updateAll = True
+      print("Updating ALL apps")
+
+if not updateAll:
+   for appName in appsToUpdate:
+      if not appName in apps:
+         print(f"ERROR: You specified app name {appName} to update, but there is no configuration data in this program for that app. Skipping")
+
+
+for appName,v in apps.items():
+   gitRepo        = v[0]
+   gitRepoVersion = v[1]
+
+   if not updateAll:
+      if not appName in appsToUpdate:
+         continue 
 
    print(f"Updating app: {appName}")
    myAppFullPathDir = os.path.join(appsFullPathDir,appName)
