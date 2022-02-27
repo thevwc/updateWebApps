@@ -34,6 +34,7 @@ if not isDevServer and not isProdServer:
    exit(-1)
 
 myAppFullPathDir = os.path.join(appsFullPathDir,appName)
+origDir = sh.pwd().stdout.decode().strip()
 
 # Stop service before doing update
 print(f"Stopping service for {appName}")
@@ -76,7 +77,9 @@ r = os.system(f"{pathToAppsPython} -m pip install --upgrade pip")
 print(f"Pip installing into venv the required packages...")
 r = os.system(f"cd {myAppFullPathDir}; . venv/bin/activate; pip install -r requirements.txt;")
 
-# Copy in the appropriate env file
+r = sh.cd(origDir)
+
+# Copy in the appropriate env file and minimized its access due to secrets in file
 if isDevServer:
    print(f"Copying over the DEVELOPMENT env config file to {myAppFullPathDir}")
    sourceFile = "env.dev"
@@ -88,10 +91,20 @@ elif isProdServer:
 else:
    print(f"ERROR, must be either DEV or PROD")
    exit(-1)
-r = sh.cp([sourceFile,os.path.join(myAppFullPathDir,destFile)])
+dst = os.path.join(myAppFullPathDir,destFile)
+r = sh.cp(sourceFile,dst)
+sh.chmod("go-rwx",dst)
 
 
-#start/enable/status systemctl
+# Now start/enable/status for web app service
+print(f"Start service for {appName}")
+r = sh.sudo(["systemctl","start",appName])
+print(f"Enable service for {appName}")
+r = sh.sudo(["systemctl","enable",appName])
+print(f"Check service status for {appName}")
+r = sh.sudo(["systemctl","status","-l","--no-pager",appName])
+
+
 #test web access
 
 #eventually, run a regression test on software
