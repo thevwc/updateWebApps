@@ -7,9 +7,6 @@ import os
 import sh
 import datetime
 
-# TBD command line options for which app and which version to select
-#select app name
-#select app branchtip, sha, or tag
 
 
 # TBD ADD ERROR CHECKS FOR EACH STEP AND MORE DEBUG OUTPUT
@@ -18,15 +15,28 @@ appName         = "Education"
 gitRepo         = "https://github.com/dneiss/vwc-education.git"
 gitRepoVersion  = "main"
 appsFullPathDir = "/var/www/fd"
+isDevServer     = False
+isProdServer    = False
+
+
+# TBD command line options for which app and which version to select
+#select app name
+#select app branchtip, sha, or tag
+isDevServer = True
+
+
+
+if isDevServer and isProdServer:
+   print("ERROR, we must be configuring either a dev or prod server")
+   exit(-1)
+if not isDevServer and not isProdServer:
+   print("ERROR, we must be configuring either a dev or prod server")
+   exit(-1)
 
 myAppFullPathDir = os.path.join(appsFullPathDir,appName)
 
-# Get into working dir area
-#r = sh.cd(f"/var/www/fd")
-#print(r)
-
 # Stop service before doing update
-print(f"stopping service for {appName}")
+print(f"Stopping service for {appName}")
 r = sh.sudo(["systemctl","stop",appName])
 
 # Create backup dir
@@ -54,20 +64,33 @@ print(f"Running git checkout for version {gitRepoVersion}")
 r = sh.git.checkout(gitRepoVersion)
 
 # Create venv 
-print(f"Creating venv")
+print(f"Creating a venv in {myAppFullPathDir}")
 r = sh.python3("-m","venv","venv")
 
 # Upgrade pip
-print(f"Upgrading pip...")
+print(f"Upgrading the venv pip to latest...")
 pathToAppsPython = os.path.join(myAppFullPathDir,"venv/bin/python")
 r = os.system(f"{pathToAppsPython} -m pip install --upgrade pip")
-print(r)
 
-# activate venv and then pip install required packages
-print(f"Pip installing required packages...")
+# Activate venv and then pip install required packages
+print(f"Pip installing into venv the required packages...")
 r = os.system(f"cd {myAppFullPathDir}; . venv/bin/activate; pip install -r requirements.txt;")
 
-#copy in env file
+# Copy in the appropriate env file
+if isDevServer:
+   print(f"Copying over the DEVELOPMENT env config file to {myAppFullPathDir}")
+   sourceFile = "env.dev"
+   destFile = ".env"
+elif isProdServer:
+   print(f"Copying over the PRODUCTION env config file to {myAppFullPathDir}")
+   sourceFile = "env.prod"
+   destFile = ".env"
+else:
+   print(f"ERROR, must be either DEV or PROD")
+   exit(-1)
+r = sh.cp([sourceFile,os.path.join(myAppFullPathDir,destFile)])
+
+
 #start/enable/status systemctl
 #test web access
 
