@@ -71,6 +71,9 @@ print(f"Running git checkout for version {gitRepoVersion}")
 r = sh.git.checkout(gitRepoVersion)
 
 
+# TBD remove any .DS_Store files
+
+
 # Create venv 
 print(f"Creating a venv in {myAppFullPathDir}")
 r = sh.python3("-m","venv","venv")
