@@ -3,6 +3,10 @@
 # This script is used to fetch/update/install/start a web app
 # (c) 2022, David Neiss, The Villages Woodshop
 
+
+# TODO - ADD THE DELETE OPERATION FOR THE OLD ARCHIVES. HOLDING OFF FOR NOW
+
+
 import os
 import sh
 import sys
@@ -22,6 +26,7 @@ apps = {
 appsFullPathDir = "/var/www/fd"
 isDevServer     = False
 isProdServer    = False
+delArchivesOlderThanDays = 180
 
 
 # List all file names to recursively delete out of the app directory
@@ -85,17 +90,32 @@ for appName,v in apps.items():
    r=sh.mkdir("-p", archiveFullPathDir)
 
    print(f"Creating backup dir ArchivedApps/{appName}")
-   myAppArchiveFullPathDir = os.path.join(archiveFullPathDir, appName)
-   r=sh.mkdir("-p", myAppArchiveFullPathDir)
+   appArchiveFullPathDir = os.path.join(archiveFullPathDir, appName)
+   r=sh.mkdir("-p", appArchiveFullPathDir)
 
 
    # Archive original app
    if os.path.exists(myAppFullPathDir):
       timeStamp = datetime.datetime.now().strftime("%m.%d.%y-%H.%M.%S.%f").strip() 
-      destPath = os.path.join(myAppArchiveFullPathDir, appName + "-" + timeStamp)
+      destPath = os.path.join(appArchiveFullPathDir, appName + "-" + timeStamp)
       print(f"Archiving current app at {myAppFullPathDir} to {destPath}")
       r = sh.mv(myAppFullPathDir,destPath)
-      # TBD prune older than N archives to reduce storage
+
+      # Delete archives older than delArchivesOlderThanDays
+      r = sh.find(appArchiveFullPathDir, "-daystart", "-mindepth", 1, "-maxdepth", 1, "-iname", f"{appName}*", "-mtime", f"+{delArchivesOlderThanDays}", "-print") 
+      dirsToDelete = r.stdout.decode().strip().split("\n")
+
+      # Filter out the empty string, which we get from prev find operation if there
+      # were no matching files
+      dirsToDelete = [d for d in dirsToDelete if len(d) > 0]
+
+      if len(dirsToDelete) > 0:
+         for d in dirsToDelete:
+            print(f"   Old archive file will be deleted: {d}")
+            # TBD add the delete here. Holding of for now because rm is a bit dangerous.
+            # Need to really test this first
+      else:
+         print(f"There were no archived apps older than {delArchivesOlderThanDays} days old to delete")
    else:
       print(f"App dir ({myAppFullPathDir}) doesn't exist, so skipped archiving it")
 
