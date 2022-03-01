@@ -11,12 +11,7 @@ import os
 import sh
 import sys
 import datetime
-
-
-# Update this with your apps
-apps = {
-   "Education" : ("https://github.com/dneiss/vwc-education.git", "main")
-}
+from appsConfig import apps
 
 
 # Note that for all sh invocations below, if command returns
