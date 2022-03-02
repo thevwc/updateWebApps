@@ -71,7 +71,7 @@ if len(appsToUpdate) == 1:
 if not updateAll:
     for appName in appsToUpdate:
         if not appName in apps:
-            print(f"ERROR: You specified app name {appName} to update, but there is no configuration data in this program for that app. Skipping")
+            print(f"ERROR: You specified app name '{appName}' to update, but there is no configuration data in this program for that app. Skipping")
 
 
 for appName,v in apps.items():
