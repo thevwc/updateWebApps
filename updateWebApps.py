@@ -162,7 +162,7 @@ for appName,v in apps.items():
 
     # Checkout specific version of code
     r = sh.cd(myAppFullPathDir)
-    print(f"Running git checkout for version {gitRepoVersion}")
+    print(f"Running git checkout for treeish {gitRepoVersion}")
     r = sh.git.checkout(gitRepoVersion)
 
 
