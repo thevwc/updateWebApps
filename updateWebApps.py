@@ -36,7 +36,7 @@ if not in_virtualenv():
 # an error, sh will check and emit stdout, stderr, and dump a backtrack for
 # exception.
 
-appsFullPathDir = "/var/www/fd"
+appsFullPathDir  = "/var/www/fd"
 isDevServer      = False
 isProdServer     = False
 delArchivesOlderThanDays = 180
@@ -46,7 +46,6 @@ delArchivesOlderThanDays = 180
 filesToDelete = [".DS_Store"]
 
 
-# TBD Add command line options for which app and which version to select
 isDevServer = True
 
 
@@ -61,21 +60,44 @@ if not isDevServer and not isProdServer:
 updateAll = False
 appsToUpdate = sys.argv[1:]
 if len(appsToUpdate) == 0:
-    print("Invoke as 'updateApps.py [appName]...' or 'updateApps.py ALL'")
+    print("Invoke as 'updateApps.py [appName[:treeish]]...' or 'updateApps.py ALL'. Note that treeish is optional and is a SHA,branch,HEAD,or tag")
     sys.exit(-1)
 if len(appsToUpdate) == 1:
     if appsToUpdate[0] == "ALL":
         updateAll = True
         print("Updating ALL apps")
 
+
+# Extract the optional tree-ish suffix. If found, patch up config's default
+# treeish-to-checkout with it
+
+def ExtractTreeish(appNameWithOptionalColonAndTreeishSuffix):
+    """Returns (appName,treeish) extracted from param"""
+    colonIndex = appNameWithOptionalColonAndTreeishSuffix.find(":")
+    if colonIndex > -1:
+        app_name = appNameWithOptionalColonAndTreeishSuffix[:colonIndex]
+        tree_ish = appNameWithOptionalColonAndTreeishSuffix[colonIndex+1:]
+    else:
+        app_name = appNameWithOptionalColonAndTreeishSuffix
+        tree_ish = None
+    return app_name,tree_ish
+
+for i,cmdLineAppName in enumerate(appsToUpdate):
+    appName,treeish = ExtractTreeish(cmdLineAppName)
+    if treeish:
+        if appName in apps:
+            apps[appName] = (apps[appName][0],treeish)
+        appsToUpdate[i] = appName
+
+
 if not updateAll:
     for appName in appsToUpdate:
         if not appName in apps:
-            print(f"ERROR: You specified app name '{appName}' to update, but there is no configuration data in this program for that app. Skipping")
+            print(f"ERROR: You specified app name '{appName}' to update, but there is no configuration data in this program for an app of that name. Skipping")
 
 
 for appName,v in apps.items():
-    gitRepo          = v[0]
+    gitRepo        = v[0]
     gitRepoVersion = v[1]
 
     if not updateAll:
