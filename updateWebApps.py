@@ -60,7 +60,7 @@ if not isDevServer and not isProdServer:
 updateAll = False
 appsToUpdate = sys.argv[1:]
 if len(appsToUpdate) == 0:
-    print("Invoke as 'updateApps.py [appName[:treeish]]...' or 'updateApps.py ALL'. Note that treeish is optional and is a SHA,branch,HEAD,or tag")
+    print("Invoke as 'updateWebApps.py [appName[:treeish]]...' or 'updateWebApps.py ALL'. Note that treeish is optional and is a SHA,branch,HEAD,or tag")
     sys.exit(-1)
 if len(appsToUpdate) == 1:
     if appsToUpdate[0] == "ALL":
