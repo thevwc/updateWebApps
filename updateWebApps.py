@@ -9,8 +9,60 @@
 import sys
 import os
 import datetime
+import logging
 import sh
 from appsConfig import apps
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(levelname)-7s %(message)s',
+                    datefmt='%m-%d-%Y %I:%M:%S %p',
+                    handlers=[logging.FileHandler("updateWebApps.log", mode='a'),logging.StreamHandler(sys.stdout)])
+
+
+# Logging stdout from subprocesses is a bit complicated because python's stdout is
+# only shallow (forked subprocesses don't honor it) so its a bit more complicated
+# and requires the use of the wurlitzer pipe redirector - see the Pypi wurlitzer
+# page and its references for more info.
+
+# to use, take your line of code that would subprocess out and add a decorator to
+# it, wrap it in a run function, and run it:
+
+# from:
+#  sh.ls
+# to:
+#  @DeepRepipeStdErrAndStdOutToLogger
+#  def run(stdOut, stdErr):
+#     return sh.ls
+#  run()
+
+def DeepRepipeStdErrAndStdOutToLogger(func):
+    def pipeRedir():
+        from io import StringIO
+        pipesStdOut = StringIO()
+        pipesStdErr = StringIO()
+        from wurlitzer import pipes
+
+        # Raise level to INFO because DEBUG level resulted in spew from sh. This is
+        # a hack because who knows if func is sh. There must be a better way of doing this
+        oldLevel = logging.getLogger().level
+        logging.getLogger().setLevel(logging.INFO)
+
+        with pipes(stdout=pipesStdOut, stderr=pipesStdErr):
+            ret = func(pipesStdOut,pipesStdErr)
+
+        logging.getLogger().setLevel(oldLevel)
+
+        # Note that this doesn't preserve the time order of messages sent to stdout and stderr,
+        # they will all appear to have occurred at the same time. Furthermore, all stdout will proceed
+        # all stderr messages. Would be better to rework the code so that this isn't the case.
+
+        for v1 in pipesStdOut.getvalue().splitlines():
+            logging.info(v1)
+        for v2 in pipesStdErr.getvalue().splitlines():
+            logging.error(v2)
+        return ret
+
+    return pipeRedir
+
 
 def get_base_prefix_compat():
     """Get base/real prefix, or sys.prefix if there is none."""
@@ -25,10 +77,10 @@ def isPython3():
     return sys.version_info[0] == 3
 
 if not isPython3():
-    print("ERROR - you should be running this with Python3")
+    logging.error("ERROR - you should be running this with Python3")
     sys.exit(-1)
 if not in_virtualenv():
-    print("ERROR - you should probably run this in its local venv, 'source venv/bin/activate'")
+    logging.error("ERROR - you should probably run this in its local venv, 'source venv/bin/activate'")
     sys.exit(-1)
 
 
@@ -50,22 +102,22 @@ isDevServer = True
 
 
 if isDevServer and isProdServer:
-    print("ERROR, we must be configuring either a dev or prod server")
+    logging.error("ERROR, we must be configuring either a dev or prod server")
     sys.exit(-1)
 if not isDevServer and not isProdServer:
-    print("ERROR, we must be configuring either a dev or prod server")
+    logging.error("ERROR, we must be configuring either a dev or prod server")
     sys.exit(-1)
 
 
 updateAll = False
 appsToUpdate = sys.argv[1:]
 if len(appsToUpdate) == 0:
-    print("Invoke as 'updateWebApps.py [appName[:treeish]]...' or 'updateWebApps.py ALL'. Note that treeish is optional and is a SHA,branch,HEAD,or tag")
+    logging.info("Invoke as 'updateWebApps.py [appName[:treeish]]...' or 'updateWebApps.py ALL'. Note that treeish is optional and is a SHA,branch,HEAD,or tag")
     sys.exit(-1)
 if len(appsToUpdate) == 1:
     if appsToUpdate[0] == "ALL":
         updateAll = True
-        print("Updating ALL apps")
+        logging.info("Updating ALL apps")
 
 
 # Extract the optional tree-ish suffix. If found, patch up config's default
@@ -93,7 +145,7 @@ for i,cmdLineAppName in enumerate(appsToUpdate):
 if not updateAll:
     for appName in appsToUpdate:
         if not appName in apps:
-            print(f"ERROR: You specified app name '{appName}' to update, but there is no configuration data in this program for an app of that name. Skipping")
+            logging.error(f"ERROR: You specified app name '{appName}' to update, but there is no configuration data in this program for an app of that name. Skipping")
 
 
 for appName,v in apps.items():
@@ -104,9 +156,15 @@ for appName,v in apps.items():
         if appName not in appsToUpdate:
             continue
 
-    print(f"Updating app: {appName}")
-    myAppFullPathDir = os.path.join(appsFullPathDir,appName)
-    r = sh.pwd()
+    logging.info(f"Updating app: {appName}")
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return os.path.join(appsFullPathDir,appName)
+    myAppFullPathDir = run()
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.pwd()
+    r = run()
     origDir = r.stdout.decode().strip()
 
 
@@ -115,29 +173,43 @@ for appName,v in apps.items():
 
 
     # Stop service before doing update
-    print(f"Stopping service for {appName}")
-    r = sh.sudo(["systemctl","stop",appName])
-
+    logging.info(f"Stopping service for {appName}")
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.sudo(["systemctl","stop",appName])
+    r = run()
 
     # Create backup dir
-    print("Creating backup dir ArchivedApps")
+    logging.info("Creating backup dir ArchivedApps")
     archiveFullPathDir = os.path.join(appsFullPathDir, "ArchivedApps")
-    r=sh.mkdir("-p", archiveFullPathDir)
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.mkdir("-p", archiveFullPathDir)
+    r = run()
 
-    print(f"Creating backup dir ArchivedApps/{appName}")
+    logging.info(f"Creating backup dir ArchivedApps/{appName}")
     appArchiveFullPathDir = os.path.join(archiveFullPathDir, appName)
-    r=sh.mkdir("-p", appArchiveFullPathDir)
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.mkdir("-p", appArchiveFullPathDir)
+    r = run()
 
 
     # Archive original app
     if os.path.exists(myAppFullPathDir):
         timeStamp = datetime.datetime.now().strftime("%m.%d.%y-%H.%M.%S.%f").strip()
         destPath = os.path.join(appArchiveFullPathDir, appName + "-" + timeStamp)
-        print(f"Archiving current app at {myAppFullPathDir} to {destPath}")
-        r = sh.mv(myAppFullPathDir,destPath)
+        logging.info(f"Archiving current app at {myAppFullPathDir} to {destPath}")
+        @DeepRepipeStdErrAndStdOutToLogger
+        def run(stdOut,stdErr):
+            return sh.mv(myAppFullPathDir,destPath)
+        r = run()
 
         # Delete archives older than delArchivesOlderThanDays
-        r = sh.find(appArchiveFullPathDir, "-daystart", "-mindepth", 1, "-maxdepth", 1, "-iname", f"{appName}*", "-mtime", f"+{delArchivesOlderThanDays}", "-print")
+        @DeepRepipeStdErrAndStdOutToLogger
+        def run(stdOut,stdErr):
+            return sh.find(appArchiveFullPathDir, "-daystart", "-mindepth", 1, "-maxdepth", 1, "-iname", f"{appName}*", "-mtime", f"+{delArchivesOlderThanDays}", "-print")
+        r = run()
         dirsToDelete = r.stdout.decode().strip().split("\n")
 
         # Filter out the empty string, which we get from prev find operation if there
@@ -146,75 +218,114 @@ for appName,v in apps.items():
 
         if len(dirsToDelete) > 0:
             for d in dirsToDelete:
-                print(f"    Old archive file will be deleted: {d}")
+                logging.info(f"    Old archive file will be deleted: {d}")
                 # TBD add the delete here. Holding of for now because rm is a bit dangerous.
                 # Need to really test this first
         else:
-            print(f"There were no archived apps older than {delArchivesOlderThanDays} days old to delete")
+            logging.info(f"There were no archived apps older than {delArchivesOlderThanDays} days old to delete")
     else:
-        print(f"App dir ({myAppFullPathDir}) doesn't exist, so skipped archiving it")
+        logging.info(f"App dir ({myAppFullPathDir}) doesn't exist, so skipped archiving it")
 
 
     # Clone repo
-    print(f"Cloning git repo {gitRepo} to {myAppFullPathDir}")
-    r = sh.git.clone(gitRepo,myAppFullPathDir)
-
+    logging.info(f"Cloning git repo {gitRepo} to {myAppFullPathDir}")
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.git.clone(gitRepo,myAppFullPathDir)
+    r = run()
 
     # Checkout specific version of code
-    r = sh.cd(myAppFullPathDir)
-    print(f"Running git checkout for treeish {gitRepoVersion}")
-    r = sh.git.checkout(gitRepoVersion)
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.cd(myAppFullPathDir)
+    r = run()
+    logging.info(f"Running git checkout for treeish {gitRepoVersion}")
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.git.checkout(gitRepoVersion)
+    r = run()
 
 
     # Recursive remove any of these specified files
     for fileName in filesToDelete:
-        print(f"Removing {fileName} files from {myAppFullPathDir}")
+        logging.info(f"Removing {fileName} files from {myAppFullPathDir}")
         # for some reason "rm -r" wasnt doing recursion
-        r = sh.find(".","-name",fileName,"-delete")
+        @DeepRepipeStdErrAndStdOutToLogger
+        def run(stdOut,stdErr):
+            return sh.find(".","-name",fileName,"-delete")
+        r = run()
 
 
     # Create venv
-    print(f"Creating a venv in {myAppFullPathDir}")
-    r = sh.python3("-m","venv","venv")
+    logging.info(f"Creating a venv in {myAppFullPathDir}")
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.python3("-m","venv","venv")
+    r = run()
 
 
     # Upgrade pip
-    print("Upgrading the venv pip to latest...")
+    logging.info("Upgrading the venv pip to latest...")
     pathToAppsPython = os.path.join(myAppFullPathDir,"venv/bin/python")
-    r = os.system(f"{pathToAppsPython} -m pip install --upgrade pip")
-
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return os.system(f"{pathToAppsPython} -m pip install --upgrade pip")
+    r = run()
 
     # Activate venv and then pip install required packages
-    print("Pip installing into venv the required packages...")
-    r = os.system(f"cd {myAppFullPathDir}; . venv/bin/activate; pip install -r requirements.txt;")
+    logging.info("Pip installing into venv the required packages...")
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return os.system(f"cd {myAppFullPathDir}; . venv/bin/activate; pip install -r requirements.txt;")
+    r = run()
 
-    r = sh.cd(origDir)
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.cd(origDir)
+    r = run()
 
 
     # Copy in the appropriate env file and minimized its access due to secrets in file
     if isDevServer:
-        print(f"Copying over the DEVELOPMENT env config file to {myAppFullPathDir}")
+        logging.info(f"Copying over the DEVELOPMENT env config file to {myAppFullPathDir}")
         sourceFile = "env.dev"
         destFile = ".env"
     elif isProdServer:
-        print(f"Copying over the PRODUCTION env config file to {myAppFullPathDir}")
+        logging.info(f"Copying over the PRODUCTION env config file to {myAppFullPathDir}")
         sourceFile = "env.prod"
         destFile = ".env"
     else:
-        print("ERROR, must be either DEV or PROD")
+        logging.error("ERROR, must be either DEV or PROD")
         sys.exit(-1)
     dst = os.path.join(myAppFullPathDir,destFile)
-    r = sh.cp(sourceFile,dst)
-    sh.chmod("go-rwx",dst)
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.cp(sourceFile,dst)
+    r = run()
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.chmod("go-rwx",dst)
+    r = run()
 
 
     # Now start/enable/status for web app service
-    print(f"Start service for {appName}")
-    r = sh.sudo(["systemctl","start",appName])
-    print(f"Enable service for {appName}")
-    r = sh.sudo(["systemctl","enable",appName])
-    print(f"Check service status for {appName}")
-    r = sh.sudo(["systemctl","status","-l","--no-pager",appName])
+    logging.info(f"Start service for {appName}")
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.sudo(["systemctl","start",appName])
+    r = run()
+
+    logging.info(f"Enable service for {appName}")
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.sudo(["systemctl","enable",appName])
+    r = run()
+
+    logging.info(f"Check service status for {appName}")
+    @DeepRepipeStdErrAndStdOutToLogger
+    def run(stdOut,stdErr):
+        return sh.sudo(["systemctl","status","-l","--no-pager",appName])
+    r = run()
 
 
 # TBD test web access
