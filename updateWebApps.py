@@ -151,7 +151,6 @@ if not updateAll:
 for appName,v in apps.items():
     gitRepo            = v[0]
     gitRepoVersion     = v[1]
-    postPipInstallWork = v[3]
 
     if not updateAll:
         if appName not in appsToUpdate:
@@ -280,9 +279,6 @@ for appName,v in apps.items():
         return os.system(f"cd {myAppFullPathDir}; . venv/bin/activate; pip install -r requirements.txt;")
     r = run()
 
-    # If there is work to do after pip install, do that
-    if postPipInstallWork:
-        postPipInstallWork(myAppFullPathDir)
 
     @DeepRepipeStdErrAndStdOutToLogger
     def run(stdOut,stdErr):
