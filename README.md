@@ -9,5 +9,5 @@ Update the `appsConfig.py` file with all known apps.
 
 
 
-NOTE THAT TO INSTALL THIS, RUN pipInstall.sh, which will do the pip install and then apply a patch
+**NOTE THAT TO INSTALL THIS, RUN pipInstall.sh, which will do the pip install and then apply a patch**
 
