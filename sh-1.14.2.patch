@@ -1,0 +1,5 @@
+670c670
+<         self.log.info(self._format_msg(msg, *a))
+---
+>         self.log.debug(self._format_msg(msg, *a))
+
